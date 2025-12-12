@@ -1,246 +1,30 @@
 // src/App.tsx
 
-import React, { useState } from 'react';
-import { Stage, Layer, Circle, Text, Arrow } from 'react-konva'; 
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Stage, Layer, Arrow } from 'react-konva'; 
 import Konva from 'konva';
-import type { Automaton, State, Transition } from './types';
+import type { Automaton, Transition } from './types';
+import { Grid } from './components/Grid';
+import { StateNode } from './components/StateNode';
+import { TransitionArrow } from './components/TransitionArrow';
+import { GRID_SIZE, INITIAL_AUTOMATON } from './constants';
 // Import your logic functions (assuming you will create/implement these files)
 // import { runDFA, runNFA } from './automataLogic'; 
 
-// Define Constants
-const CANVAS_WIDTH = 800;
-const CANVAS_HEIGHT = 600;
-const STATE_RADIUS = 30;
-const STATE_FILL_COLOR = '#FFFFAA'; 
-
-// --- INITIAL DATA ---
-const INITIAL_AUTOMATON: Automaton = {
-    states: [
-        { id: 'q0', isStartState: true, isFinalState: false, x: 200, y: 300 },
-    ],
-    alphabet: new Set(['0', '1']),
-    transitions: [],
-};
-
 // =============================================================
-//   TRANSITION ARROWS HELPERS AND COMPONENT
-// =============================================================
-
-// Helper function to aggregate and group transitions by their (from, to) pair
-const groupTransitions = (transitions: Transition[]) => {
-    const groups = new Map<string, Transition[]>();
-    for (const t of transitions) {
-        const key = `${t.from},${t.to}`;
-        if (!groups.has(key)) {
-            groups.set(key, []);
-        }
-        groups.get(key)!.push(t);
-    }
-    return groups;
-};
-
-interface TransitionArrowProps {
-    fromState: State;
-    toState: State;
-    transition: Transition;
-    allTransitions: Transition[]; 
-}
-
-const TransitionArrow: React.FC<TransitionArrowProps> = ({ fromState, toState, transition, allTransitions }) => {
-    const isLoop = fromState.id === toState.id;
-    const groups = groupTransitions(allTransitions);
-    const key = `${fromState.id},${toState.id}`;
-    
-    // Transitions that share the same (from, to) pair
-    const matchingTransitions = groups.get(key) || [];
-    const count = matchingTransitions.length;
-    const index = matchingTransitions.findIndex(t => t === transition);
-
-    // Check for reverse transition (for bidirectional offset)
-    const reverseKey = `${toState.id},${fromState.id}`;
-    const reverseTransitionExists = groups.has(reverseKey);
-
-    let curveOffset = 0;
-    
-    if (isLoop) {
-        // ===== SELF LOOP ARROW (Draws a loop above the state) =====
-        const loopRadius = STATE_RADIUS + 15 + index * 10; // Stagger loops if multiple
-        const startAngle = -Math.PI / 2 + 0.1; 
-        const endAngle = -Math.PI / 2 - 0.1; 
-        const centerX = fromState.x;
-        const centerY = fromState.y - loopRadius; 
-
-        return (
-            <React.Fragment key={key + index}>
-                <Arrow
-                    points={[
-                        fromState.x + STATE_RADIUS * Math.cos(startAngle), fromState.y + STATE_RADIUS * Math.sin(startAngle),
-                        centerX + loopRadius * Math.cos(-Math.PI * 0.4), centerY + loopRadius * Math.sin(-Math.PI * 0.4),
-                        centerX + loopRadius * Math.cos(-Math.PI * 0.6), centerY + loopRadius * Math.sin(-Math.PI * 0.6),
-                        fromState.x + STATE_RADIUS * Math.cos(endAngle), fromState.y + STATE_RADIUS * Math.sin(endAngle),
-                    ]}
-                    stroke="black"
-                    fill="black"
-                    strokeWidth={2}
-                    pointerLength={10}
-                    pointerWidth={10}
-                    tension={0.5} 
-                />
-                 <Text
-                    x={centerX}
-                    y={centerY - loopRadius - 5}
-                    text={transition.symbol}
-                    fontSize={14}
-                    fill="black"
-                    offsetX={transition.symbol.length * 4}
-                />
-            </React.Fragment>
-        );
-    } 
-    
-    // ===== CURVED EDGES (Non-loops) =====
-    
-    // 1. Calculate Multi-Transition Offset
-    if (count > 1) {
-        const middle = (count - 1) / 2;
-        curveOffset = (index - middle) * 15; // Offset each transition by 15px
-    }
-
-    // 2. Add Fixed Reverse Offset (The fix for parallel arrows)
-    let totalOffset = curveOffset;
-    if (reverseTransitionExists) {
-        // If reverse exists, give it a fixed push away from the center line.
-        // We ensure the curveOffset shifts it further outward if needed.
-        totalOffset = curveOffset + (curveOffset >= 0 ? 15 : -15);
-    }
-
-
-    // 3. Geometry Calculations
-    const angle = Math.atan2(toState.y - fromState.y, toState.x - fromState.x);
-    const startX = fromState.x + STATE_RADIUS * Math.cos(angle);
-    const startY = fromState.y + STATE_RADIUS * Math.sin(angle);
-    const endX = toState.x - STATE_RADIUS * Math.cos(angle);
-    const endY = toState.y - STATE_RADIUS * Math.sin(angle);
-    const perpAngle = angle - Math.PI / 2;
-
-    // Midpoint applying the total offset
-    const midX = (startX + endX) / 2 + Math.cos(perpAngle) * totalOffset;
-    const midY = (startY + endY) / 2 + Math.sin(perpAngle) * totalOffset;
-    
-    return (
-        <React.Fragment key={key + index}>
-            <Arrow
-                points={[startX, startY, midX, midY, endX, endY]}
-                stroke="black"
-                fill="black"
-                strokeWidth={2}
-                pointerLength={10}
-                pointerWidth={10}
-                tension={0.5} // Makes the line a curve through the midpoint
-            />
-            
-            {/* Transition Label (Rendered near the midpoint) */}
-            <Text
-                x={midX}
-                y={midY}
-                text={transition.symbol}
-                fontSize={16}
-                fill="black"
-                // Offset slightly based on the angle so the text is not directly under the line
-                offsetX={transition.symbol.length * 4}
-                offsetY={angle > -Math.PI/2 && angle < Math.PI/2 ? 15 : -25}
-            />
-        </React.Fragment>
-    );
-};
-
-
-// =============================================================
-//   STATE NODES
-// =============================================================
-interface StateNodeProps {
-    state: State;
-    onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => void;
-    onContextMenu: (e: Konva.KonvaEventObject<MouseEvent>, stateId: string) => void;
-    onClick: (stateId: string) => void;
-    isSelected: boolean;
-}
-
-const StateNode: React.FC<StateNodeProps> = ({ state, onDragEnd, onContextMenu, onClick, isSelected }) => {
-    const strokeColor = isSelected ? 'red' : (state.isFinalState ? 'blue' : 'black');
-    const strokeWidth = isSelected ? 4 : 2;
-
-    const handleContextMenu = (e: Konva.KonvaEventObject<MouseEvent>) => {
-        e.evt.preventDefault();
-        onContextMenu(e, state.id);
-    };
-
-    return (
-        <React.Fragment key={state.id}>
-            
-            {/* Start arrow */}
-            {state.isStartState && (
-                <Arrow
-                    points={[state.x - 70, state.y, state.x - STATE_RADIUS, state.y]}
-                    stroke="black"
-                    fill="black"
-                    strokeWidth={2}
-                    pointerLength={10}
-                    pointerWidth={10}
-                    listening={false}
-                />
-            )}
-
-            {/* Double circle for final state */}
-            {state.isFinalState && (
-                <Circle
-                    x={state.x}
-                    y={state.y}
-                    radius={STATE_RADIUS + 5}
-                    stroke={strokeColor}
-                    strokeWidth={2}
-                    listening={false}
-                />
-            )}
-
-            {/* Main state circle */}
-            <Circle
-                x={state.x}
-                y={state.y}
-                radius={STATE_RADIUS}
-                fill={STATE_FILL_COLOR}
-                stroke={strokeColor}
-                strokeWidth={strokeWidth}
-                draggable
-                onDragEnd={onDragEnd}
-                onContextMenu={handleContextMenu}
-                onClick={() => onClick(state.id)}
-            />
-
-            {/* Label */}
-            <Text
-                x={state.x}
-                y={state.y}
-                text={state.id}
-                fontSize={16}
-                fill="black"
-                offsetX={state.id.length * 4}
-                offsetY={8}
-                listening={false}
-            />
-        </React.Fragment>
-    );
-};
-
-
-// =============================================================
-//   MAIN APP COMPONENT
+//   MAIN APP COMPONENT
 // =============================================================
 function App() {
     const [automaton, setAutomaton] = useState<Automaton>(INITIAL_AUTOMATON);
     const [transitionFrom, setTransitionFrom] = useState<string | null>(null);
     const [testInput, setTestInput] = useState('');
     const [result, setResult] = useState<string | null>(null);
+    const [hoveredState, setHoveredState] = useState<string | null>(null);
+    const [hoveredTransition, setHoveredTransition] = useState<Transition | null>(null);
+    const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
+    const [selectedState, setSelectedState] = useState<string | null>(null);
+    const stageRef = useRef<Konva.Stage>(null);
+    const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
 
 
     const updateAutomaton = (updates: Partial<Automaton>) => {
@@ -250,10 +34,82 @@ function App() {
     // --- UTILITIES ---
     const findState = (id: string) => automaton.states.find(s => s.id === id);
 
+    // --- DELETE HANDLERS ---
+    const handleDeleteState = useCallback((stateId: string) => {
+        if (window.confirm(`Delete state "${stateId}" and all its transitions?`)) {
+            setAutomaton(prev => ({
+                ...prev,
+                states: prev.states.filter(s => s.id !== stateId),
+                transitions: prev.transitions.filter(t => t.from !== stateId && t.to !== stateId)
+            }));
+            setSelectedState(null);
+            setTransitionFrom(null);
+        }
+    }, []);
+
+    const handleDeleteTransition = useCallback((transition: Transition) => {
+        setAutomaton(prev => ({
+            ...prev,
+            transitions: prev.transitions.filter(t => 
+                !(t.from === transition.from && t.to === transition.to && t.symbol === transition.symbol)
+            )
+        }));
+        setHoveredTransition(null);
+    }, []);
+
+    // --- WINDOW RESIZE HANDLER ---
+    useEffect(() => {
+        const handleResize = () => {
+            setWindowSize({ width: window.innerWidth, height: window.innerHeight });
+        };
+
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    // --- KEYBOARD SHORTCUTS ---
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Delete key - delete selected state or hovered transition
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                if (selectedState) {
+                    handleDeleteState(selectedState);
+                } else if (hoveredTransition) {
+                    handleDeleteTransition(hoveredTransition);
+                }
+            }
+            
+            // Escape key - cancel transition creation or clear selection
+            if (e.key === 'Escape') {
+                setTransitionFrom(null);
+                setSelectedState(null);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedState, hoveredTransition, handleDeleteState, handleDeleteTransition]);
+
 
     // --- INTERACTION HANDLERS ---
 
+    const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>, stateId: string) => {
+        // Update state position in real-time during drag
+        // onDragMove fires continuously as the node is dragged
+        const node = e.target;
+        const newX = node.x();
+        const newY = node.y();
+        
+        setAutomaton(prev => ({
+            ...prev,
+            states: prev.states.map(s =>
+                s.id === stateId ? { ...s, x: newX, y: newY } : s
+            ),
+        }));
+    };
+
     const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>, stateId: string) => {
+        // Final update when drag ends (ensures position is correct)
         updateAutomaton({
             states: automaton.states.map(s =>
                 s.id === stateId ? { ...s, x: e.target.x(), y: e.target.y() } : s
@@ -276,7 +132,7 @@ function App() {
         });
     };
 
-    const handleToggleFinal = (_e: any, id: string) => {
+    const handleToggleFinal = (_e: Konva.KonvaEventObject<MouseEvent>, id: string) => {
         updateAutomaton({
             states: automaton.states.map(s =>
                 s.id === id ? { ...s, isFinalState: !s.isFinalState } : s
@@ -284,19 +140,33 @@ function App() {
         });
     };
 
-    const handleClickOnState = (stateId: string) => {
-        if (!transitionFrom) {
-            setTransitionFrom(stateId);
+    const handleClickOnState = (stateId: string, isRightClick: boolean = false) => {
+        // Don't create transitions on right-click
+        if (isRightClick) {
             return;
         }
 
+        if (!transitionFrom) {
+            // First click: select the source state for transition creation
+            setTransitionFrom(stateId);
+            setSelectedState(stateId);
+            return;
+        }
+
+        // Second click: create transition to this state
         const from = transitionFrom;
         const to = stateId;
 
-        const symbol = prompt(`Enter symbol(s) for transition ${from} → ${to} (comma-separated):`);
+        // Use a more user-friendly input method
+        const symbol = window.prompt(
+            `Create transition from "${from}" to "${to}"\n\n` +
+            `Enter symbol(s) (comma-separated for multiple):\n` +
+            `Example: 0,1 or a,b or ε\n\n` +
+            `(Click Cancel or press Escape to cancel)`
+        );
 
-        if (symbol) {
-            const symbols = symbol.split(',').map(s => s.trim());
+        if (symbol && symbol.trim()) {
+            const symbols = symbol.split(',').map(s => s.trim()).filter(s => s.length > 0);
             const newTransitions = symbols.map(sym => ({
                 from, to, symbol: sym
             }));
@@ -313,11 +183,30 @@ function App() {
             updateAutomaton({ alphabet: newAlphabet });
         }
 
+        // Always clear selection after attempting to create transition
         setTransitionFrom(null);
+        setSelectedState(null);
     };
 
     const handleStageClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
-        if (e.target.getClassName() === 'Stage') setTransitionFrom(null);
+        if (e.target.getClassName() === 'Stage') {
+            setTransitionFrom(null);
+            setSelectedState(null);
+        }
+    };
+
+    const handleStageMouseMove = (e: Konva.KonvaEventObject<MouseEvent>) => {
+        if (transitionFrom && e.target.getClassName() === 'Stage') {
+            const stage = e.target.getStage();
+            if (stage) {
+                const pointerPos = stage.getPointerPosition();
+                if (pointerPos) {
+                    setMousePos(pointerPos);
+                }
+            }
+        } else {
+            setMousePos(null);
+        }
     };
 
     // --- MEMBERSHIP TEST HANDLER ---
@@ -340,73 +229,266 @@ function App() {
 
 
     // --- RENDER ---
+    const fromStateForPreview = transitionFrom ? findState(transitionFrom) : null;
+    
     return (
-        <div className="App">
-            <Stage
-                width={CANVAS_WIDTH}
-                height={CANVAS_HEIGHT}
-                onDblClick={handleStageDblClick}
-                onClick={handleStageClick}
-                style={{ border: '1px solid #333' }}
-            >
-                <Layer fill="white">
-                    {/* TRANSITIONS (Arrows) - Rendered first */}
-                    {automaton.transitions.map((t, i) => {
-                        const from = findState(t.from);
-                        const to = findState(t.to);
+        <div className="App" style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', margin: 0, padding: 0 }}>
+            {/* FULL-SCREEN GRAPH */}
+            <div style={{ 
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                width: '100vw',
+                height: '100vh',
+                zIndex: 0
+            }}>
+                <Stage
+                    ref={stageRef}
+                    width={windowSize.width}
+                    height={windowSize.height}
+                    onDblClick={handleStageDblClick}
+                    onClick={handleStageClick}
+                    onMouseMove={handleStageMouseMove}
+                    style={{ cursor: transitionFrom ? 'crosshair' : 'default' }}
+                >
+                    <Layer>
+                        {/* GRID BACKGROUND */}
+                        <Grid width={windowSize.width} height={windowSize.height} gridSize={GRID_SIZE} />
                         
-                        if (!from || !to) return null;
-
-                        return (
-                            <TransitionArrow
-                                key={i}
-                                fromState={from}
-                                toState={to}
-                                transition={t}
-                                allTransitions={automaton.transitions} 
+                        {/* TRANSITION PREVIEW LINE */}
+                        {transitionFrom && fromStateForPreview && mousePos && (
+                            <Arrow
+                                points={[
+                                    fromStateForPreview.x,
+                                    fromStateForPreview.y,
+                                    mousePos.x,
+                                    mousePos.y
+                                ]}
+                                stroke="#999"
+                                fill="#999"
+                                strokeWidth={2}
+                                dash={[5, 5]}
+                                pointerLength={10}
+                                pointerWidth={10}
+                                listening={false}
                             />
-                        );
-                    })}
+                        )}
 
-                    {/* STATES (Nodes) - Rendered last */}
-                    {automaton.states.map(state => (
-                        <StateNode
-                            key={state.id}
-                            state={state}
-                            onDragEnd={(e) => handleDragEnd(e, state.id)}
-                            onContextMenu={handleToggleFinal}
-                            onClick={handleClickOnState}
-                            isSelected={state.id === transitionFrom}
-                        />
-                    ))}
-                </Layer>
-            </Stage>
-            
-            {/* =======================================================
-                 MEMBERSHIP TEST INTERFACE
-                 ======================================================= */}
-            <div style={{ padding: '15px', borderTop: '1px solid #ccc', margin: '15px 0' }}>
-                <h3>Membership Test</h3>
-                <input
-                    type="text"
-                    placeholder="Enter string to test (e.g., 0110)"
-                    value={testInput}
-                    onChange={(e) => setTestInput(e.target.value)}
-                    style={{ marginRight: '10px', padding: '5px' }}
-                />
-                <button onClick={handleTestMembership} style={{ padding: '5px 10px' }}>
-                    Run DFA/NFA
-                </button>
-                
-                {result && <p style={{ marginTop: '10px', fontWeight: 'bold', color: result.includes('ACCEPTED') ? 'green' : 'red' }}>Result: {result}</p>}
+                        {/* TRANSITIONS (Arrows) - Rendered first */}
+                        {automaton.transitions.map((t, i) => {
+                            const from = findState(t.from);
+                            const to = findState(t.to);
+                            
+                            if (!from || !to) return null;
+
+                            const isHovered = hoveredTransition?.from === t.from && 
+                                            hoveredTransition?.to === t.to && 
+                                            hoveredTransition?.symbol === t.symbol;
+
+                            return (
+                                <TransitionArrow
+                                    key={`${t.from}-${t.to}-${t.symbol}-${i}`}
+                                    fromState={from}
+                                    toState={to}
+                                    transition={t}
+                                    allTransitions={automaton.transitions}
+                                    isHovered={isHovered}
+                                    onHover={setHoveredTransition}
+                                    onDelete={handleDeleteTransition}
+                                />
+                            );
+                        })}
+
+                        {/* STATES (Nodes) - Rendered last */}
+                        {automaton.states.map(state => (
+                            <StateNode
+                                key={state.id}
+                                state={state}
+                                onDragMove={(e) => handleDragMove(e, state.id)}
+                                onDragEnd={(e) => handleDragEnd(e, state.id)}
+                                onContextMenu={handleToggleFinal}
+                                onClick={handleClickOnState}
+                                isSelected={state.id === transitionFrom || state.id === selectedState}
+                                isHovered={hoveredState === state.id}
+                                onHover={setHoveredState}
+                                onDelete={handleDeleteState}
+                            />
+                        ))}
+                    </Layer>
+                </Stage>
             </div>
 
+            {/* TOOLBAR - OVERLAY */}
+            <div style={{ 
+                position: 'fixed',
+                top: '10px',
+                left: '10px',
+                right: '10px',
+                padding: '10px', 
+                backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+                borderRadius: '8px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '15px',
+                flexWrap: 'wrap',
+                zIndex: 1000,
+                backdropFilter: 'blur(10px)'
+            }}>
+                <div style={{ fontWeight: 'bold', fontSize: '18px', color: '#333' }}>
+                    Automaton Builder
+                </div>
+                <div style={{ 
+                    padding: '5px 12px', 
+                    backgroundColor: transitionFrom ? '#ffeb3b' : '#e3f2fd', 
+                    borderRadius: '4px',
+                    fontSize: '14px',
+                    color: transitionFrom ? '#f57f17' : '#1976d2'
+                }}>
+                    {transitionFrom ? `Creating transition from: ${transitionFrom}` : 'Mode: Click a state to start creating a transition'}
+                </div>
+                <div style={{ marginLeft: 'auto', fontSize: '12px', color: '#666' }}>
+                    <div>💡 Tips: Double-click canvas to add state • Right-click state to toggle final/delete • Delete key to remove selected</div>
+                </div>
+            </div>
+            
+            {/* =======================================================
+                 MEMBERSHIP TEST INTERFACE - OVERLAY
+                 ======================================================= */}
+            <div style={{ 
+                position: 'fixed',
+                bottom: '10px',
+                left: '10px',
+                padding: '15px', 
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                borderRadius: '8px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                zIndex: 1000,
+                backdropFilter: 'blur(10px)',
+                minWidth: '300px'
+            }}>
+                <h3 style={{ marginTop: '0', color: '#333' }}>Membership Test</h3>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input
+                        type="text"
+                        placeholder="Enter string to test (e.g., 0110)"
+                        value={testInput}
+                        onChange={(e) => setTestInput(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                handleTestMembership();
+                            }
+                        }}
+                        style={{ 
+                            padding: '8px 12px', 
+                            borderRadius: '4px',
+                            border: '1px solid #ddd',
+                            fontSize: '14px',
+                            minWidth: '200px'
+                        }}
+                    />
+                    <button 
+                        onClick={handleTestMembership} 
+                        style={{ 
+                            padding: '8px 16px',
+                            borderRadius: '4px',
+                            border: '1px solid #1976d2',
+                            backgroundColor: '#1976d2',
+                            color: 'white',
+                            cursor: 'pointer',
+                            fontSize: '14px',
+                            fontWeight: '500'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = '#1565c0';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = '#1976d2';
+                        }}
+                    >
+                        Run DFA/NFA
+                    </button>
+                    
+                    {result && (
+                        <div style={{ 
+                            marginLeft: '10px',
+                            padding: '8px 12px',
+                            borderRadius: '4px',
+                            backgroundColor: result.includes('ACCEPTED') ? '#e8f5e9' : '#ffebee',
+                            color: result.includes('ACCEPTED') ? '#2e7d32' : '#c62828',
+                            fontWeight: 'bold',
+                            fontSize: '14px'
+                        }}>
+                            {result}
+                        </div>
+                    )}
+                </div>
+            </div>
 
-            {/* DEBUG OUTPUT */}
-            <pre style={{ fontSize: '10px', textAlign: 'left', maxHeight: '200px', overflowY: 'scroll' }}>
-                <h3 style={{ margin: '5px 0' }}>Transitions (Debug):</h3>
-                {JSON.stringify(automaton.transitions, null, 2)}
-            </pre>
+            {/* STATISTICS PANEL - OVERLAY */}
+            <div style={{ 
+                position: 'fixed',
+                top: '70px',
+                right: '10px',
+                padding: '15px', 
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                borderRadius: '8px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px',
+                zIndex: 1000,
+                backdropFilter: 'blur(10px)',
+                minWidth: '200px'
+            }}>
+                <div style={{ fontSize: '14px', color: '#333' }}>
+                    <strong>States:</strong> {automaton.states.length}
+                </div>
+                <div style={{ fontSize: '14px', color: '#333' }}>
+                    <strong>Transitions:</strong> {automaton.transitions.length}
+                </div>
+                <div style={{ fontSize: '14px', color: '#333' }}>
+                    <strong>Alphabet:</strong> {Array.from(automaton.alphabet).sort().join(', ') || 'None'}
+                </div>
+                <div style={{ fontSize: '14px', color: '#333' }}>
+                    <strong>Start State:</strong> {automaton.states.find(s => s.isStartState)?.id || 'None'}
+                </div>
+                <div style={{ fontSize: '14px', color: '#333' }}>
+                    <strong>Final States:</strong> {automaton.states.filter(s => s.isFinalState).map(s => s.id).join(', ') || 'None'}
+                </div>
+            </div>
+
+            {/* DEBUG OUTPUT - Collapsible - OVERLAY */}
+            <details style={{ 
+                position: 'fixed',
+                bottom: '10px',
+                right: '10px',
+                padding: '15px', 
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                borderRadius: '8px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                zIndex: 1000,
+                backdropFilter: 'blur(10px)',
+                maxWidth: '400px',
+                maxHeight: '300px'
+            }}>
+                <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#666' }}>
+                    Debug Info (Click to expand)
+                </summary>
+                <pre style={{ 
+                    fontSize: '11px', 
+                    textAlign: 'left', 
+                    maxHeight: '200px', 
+                    overflowY: 'scroll',
+                    marginTop: '10px',
+                    padding: '10px',
+                    backgroundColor: '#f5f5f5',
+                    borderRadius: '4px'
+                }}>
+                    <strong>Transitions:</strong>
+                    {JSON.stringify(automaton.transitions, null, 2)}
+                </pre>
+            </details>
         </div>
     );
 }
