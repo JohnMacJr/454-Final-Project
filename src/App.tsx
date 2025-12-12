@@ -1,6 +1,6 @@
 // src/App.tsx
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { Stage, Layer, Arrow } from 'react-konva'; 
 import Konva from 'konva';
 import type { Automaton, Transition } from './types';
@@ -8,7 +8,11 @@ import { Grid } from './components/Grid';
 import { StateNode } from './components/StateNode';
 import { TransitionArrow } from './components/TransitionArrow';
 import { GRID_SIZE, INITIAL_AUTOMATON } from './constants';
-import { runDFA, runNFA, checkDFAEquivalence } from './automataLogic'; 
+import { runDFA, runNFA, checkDFAEquivalence, isNFA } from './automataLogic';
+import { findState } from './utils';
+import { saveAutomatonToFile, loadAutomatonFromFile, testMembership } from './helpers/automatonHelpers';
+import { useWindowSize } from './hooks/useWindowSize';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'; 
 
 // =============================================================
 //   MAIN APP COMPONENT
@@ -39,11 +43,7 @@ function App() {
     // Equivalence test state
     const [equivalenceResult, setEquivalenceResult] = useState<string | null>(null);
 
-    const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
-
-
-    // --- UTILITIES ---
-    const findState = (automaton: Automaton, id: string) => automaton.states.find(s => s.id === id);
+    const windowSize = useWindowSize();
 
     // --- CREATE HANDLERS FOR SPECIFIC AUTOMATON ---
     const createHandlers = (automatonNum: 1 | 2) => {
@@ -250,247 +250,72 @@ function App() {
     const handlers1 = createHandlers(1);
     const handlers2 = createHandlers(2);
 
-    // --- WINDOW RESIZE HANDLER ---
-    useEffect(() => {
-        const handleResize = () => {
-            setWindowSize({ width: window.innerWidth, height: window.innerHeight });
-        };
-
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
-
     // --- KEYBOARD SHORTCUTS ---
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            // Delete key - delete selected state or hovered transition (check both automata)
-            if (e.key === 'Delete' || e.key === 'Backspace') {
-                if (selectedState1) {
-                    if (window.confirm(`Delete state "${selectedState1}" and all its transitions?`)) {
-                        setAutomaton1(prev => ({
-                            ...prev,
-                            states: prev.states.filter(s => s.id !== selectedState1),
-                            transitions: prev.transitions.filter(t => t.from !== selectedState1 && t.to !== selectedState1)
-                        }));
-                        setSelectedState1(null);
-                        setTransitionFrom1(null);
-                    }
-                } else if (selectedState2) {
-                    if (window.confirm(`Delete state "${selectedState2}" and all its transitions?`)) {
-                        setAutomaton2(prev => ({
-                            ...prev,
-                            states: prev.states.filter(s => s.id !== selectedState2),
-                            transitions: prev.transitions.filter(t => t.from !== selectedState2 && t.to !== selectedState2)
-                        }));
-                        setSelectedState2(null);
-                        setTransitionFrom2(null);
-                    }
-                } else if (hoveredTransition1) {
-                    setAutomaton1(prev => ({
-                        ...prev,
-                        transitions: prev.transitions.filter(t => 
-                            !(t.from === hoveredTransition1.from && t.to === hoveredTransition1.to && t.symbol === hoveredTransition1.symbol)
-                        )
-                    }));
-                    setHoveredTransition1(null);
-                } else if (hoveredTransition2) {
-                    setAutomaton2(prev => ({
-                        ...prev,
-                        transitions: prev.transitions.filter(t => 
-                            !(t.from === hoveredTransition2.from && t.to === hoveredTransition2.to && t.symbol === hoveredTransition2.symbol)
-                        )
-                    }));
-                    setHoveredTransition2(null);
-                }
-            }
-            
-            // Escape key - cancel transition creation or clear selection
-            if (e.key === 'Escape') {
-                setTransitionFrom1(null);
-                setSelectedState1(null);
-                setTransitionFrom2(null);
-                setSelectedState2(null);
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedState1, selectedState2, hoveredTransition1, hoveredTransition2]);
+    useKeyboardShortcuts({
+        selectedState1,
+        selectedState2,
+        hoveredTransition1,
+        hoveredTransition2,
+        setAutomaton1,
+        setAutomaton2,
+        setSelectedState1,
+        setSelectedState2,
+        setTransitionFrom1,
+        setTransitionFrom2,
+        setHoveredTransition1,
+        setHoveredTransition2,
+    });
 
 
-
-    // --- HELPER: Determine if automaton is NFA or DFA ---
-    const isNFA = (automaton: Automaton): boolean => {
-        // Check for epsilon transitions
-        const hasEpsilon = automaton.transitions.some(t => t.symbol === 'ε');
-        if (hasEpsilon) return true;
-
-        // Check for non-determinism: multiple transitions from same state with same symbol
-        const transitionMap = new Map<string, Set<string>>();
-        for (const t of automaton.transitions) {
-            const key = `${t.from}:${t.symbol}`;
-            if (!transitionMap.has(key)) {
-                transitionMap.set(key, new Set());
-            }
-            transitionMap.get(key)!.add(t.to);
-        }
-
-        // If any state+symbol combination has multiple destinations, it's an NFA
-        for (const destinations of transitionMap.values()) {
-            if (destinations.size > 1) return true;
-        }
-
-        return false;
-    };
 
     // --- MEMBERSHIP TEST HANDLERS ---
     const handleTestMembership1 = () => {
-        if (testInput1.length === 0) {
-            setResult1("Please enter an input string.");
-            return;
-        }
-
-        const startState = automaton1.states.find(s => s.isStartState);
-        if (!startState) {
-            setResult1("Error: No start state defined. Please mark a state as the start state.");
-            return;
-        }
-
-        const nfa = isNFA(automaton1);
-        const isAccepted = nfa ? runNFA(automaton1, testInput1) : runDFA(automaton1, testInput1);
-        const automatonType = nfa ? 'NFA' : 'DFA';
-
-        if (isAccepted) {
-            setResult1(`[${automatonType}] String "${testInput1}" is ACCEPTED.`);
-        } else {
-            setResult1(`[${automatonType}] String "${testInput1}" is REJECTED.`);
-        }
+        const result = testMembership(automaton1, testInput1, isNFA, runDFA, runNFA);
+        setResult1(result);
     };
 
     const handleTestMembership2 = () => {
-        if (testInput2.length === 0) {
-            setResult2("Please enter an input string.");
-            return;
-        }
-
-        const startState = automaton2.states.find(s => s.isStartState);
-        if (!startState) {
-            setResult2("Error: No start state defined. Please mark a state as the start state.");
-            return;
-        }
-
-        const nfa = isNFA(automaton2);
-        const isAccepted = nfa ? runNFA(automaton2, testInput2) : runDFA(automaton2, testInput2);
-        const automatonType = nfa ? 'NFA' : 'DFA';
-
-        if (isAccepted) {
-            setResult2(`[${automatonType}] String "${testInput2}" is ACCEPTED.`);
-        } else {
-            setResult2(`[${automatonType}] String "${testInput2}" is REJECTED.`);
-        }
+        const result = testMembership(automaton2, testInput2, isNFA, runDFA, runNFA);
+        setResult2(result);
     };
 
     // --- SAVE/LOAD HANDLERS ---
     const handleSaveAutomaton1 = () => {
-        const automatonToSave = {
-            ...automaton1,
-            alphabet: Array.from(automaton1.alphabet)
-        };
-        const json = JSON.stringify(automatonToSave, null, 2);
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'automaton1.json';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        saveAutomatonToFile(automaton1, 'automaton1.json');
     };
 
     const handleSaveAutomaton2 = () => {
-        const automatonToSave = {
-            ...automaton2,
-            alphabet: Array.from(automaton2.alphabet)
-        };
-        const json = JSON.stringify(automatonToSave, null, 2);
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'automaton2.json';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        saveAutomatonToFile(automaton2, 'automaton2.json');
     };
 
     const handleLoadAutomaton1 = () => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.json';
-        input.onchange = (e) => {
-            const file = (e.target as HTMLInputElement).files?.[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                try {
-                    const json = event.target?.result as string;
-                    const loaded = JSON.parse(json);
-                    
-                    // Convert alphabet array back to Set
-                    const automaton: Automaton = {
-                        ...loaded,
-                        alphabet: new Set(loaded.alphabet || [])
-                    };
-                    
-                    setAutomaton1(automaton);
-                    setResult1(null);
-                    setTransitionFrom1(null);
-                    setSelectedState1(null);
-                } catch (error) {
-                    alert('Error loading automaton: Invalid JSON file.');
-                    console.error('Load error:', error);
-                }
-            };
-            reader.readAsText(file);
-        };
-        input.click();
+        loadAutomatonFromFile(
+            (automaton) => {
+                setAutomaton1(automaton);
+                setResult1(null);
+                setTransitionFrom1(null);
+                setSelectedState1(null);
+            },
+            (error) => {
+                alert('Error loading automaton: Invalid JSON file.');
+                console.error('Load error:', error);
+            }
+        );
     };
 
     const handleLoadAutomaton2 = () => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.json';
-        input.onchange = (e) => {
-            const file = (e.target as HTMLInputElement).files?.[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                try {
-                    const json = event.target?.result as string;
-                    const loaded = JSON.parse(json);
-                    
-                    // Convert alphabet array back to Set
-                    const automaton: Automaton = {
-                        ...loaded,
-                        alphabet: new Set(loaded.alphabet || [])
-                    };
-                    
-                    setAutomaton2(automaton);
-                    setResult2(null);
-                    setTransitionFrom2(null);
-                    setSelectedState2(null);
-                } catch (error) {
-                    alert('Error loading automaton: Invalid JSON file.');
-                    console.error('Load error:', error);
-                }
-            };
-            reader.readAsText(file);
-        };
-        input.click();
+        loadAutomatonFromFile(
+            (automaton) => {
+                setAutomaton2(automaton);
+                setResult2(null);
+                setTransitionFrom2(null);
+                setSelectedState2(null);
+            },
+            (error) => {
+                alert('Error loading automaton: Invalid JSON file.');
+                console.error('Load error:', error);
+            }
+        );
     };
 
     // --- EQUIVALENCE TEST HANDLER ---

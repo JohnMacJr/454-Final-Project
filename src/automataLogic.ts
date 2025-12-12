@@ -205,3 +205,29 @@ export const checkDFAEquivalence = (M1: Automaton, M2: Automaton): boolean => {
   return !reachableDisagreement;
 };
 
+//
+// Determine if automaton is NFA or DFA
+//
+export const isNFA = (automaton: Automaton): boolean => {
+  // Check for epsilon transitions
+  const hasEpsilon = automaton.transitions.some(t => t.symbol === 'ε');
+  if (hasEpsilon) return true;
+
+  // Check for non-determinism: multiple transitions from same state with same symbol
+  const transitionMap = new Map<string, Set<string>>();
+  for (const t of automaton.transitions) {
+    const key = `${t.from}:${t.symbol}`;
+    if (!transitionMap.has(key)) {
+      transitionMap.set(key, new Set());
+    }
+    transitionMap.get(key)!.add(t.to);
+  }
+
+  // If any state+symbol combination has multiple destinations, it's an NFA
+  for (const destinations of transitionMap.values()) {
+    if (destinations.size > 1) return true;
+  }
+
+  return false;
+};
+

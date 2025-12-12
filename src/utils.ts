@@ -1,4 +1,4 @@
-import type { Transition } from './types';
+import type { Transition, Automaton } from './types';
 
 /**
  * Groups transitions by their (from, to) pair
@@ -15,4 +15,10 @@ export const groupTransitions = (transitions: Transition[]) => {
     }
     return groups;
 };
+
+/**
+ * Finds a state by ID in an automaton
+ */
+export const findState = (automaton: Automaton, id: string) => 
+    automaton.states.find(s => s.id === id);
 
