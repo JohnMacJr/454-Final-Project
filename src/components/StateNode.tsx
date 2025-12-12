@@ -9,7 +9,7 @@ export interface StateNodeProps {
     onDragMove: (e: Konva.KonvaEventObject<DragEvent>, stateId: string) => void;
     onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => void;
     onContextMenu: (e: Konva.KonvaEventObject<MouseEvent>, stateId: string) => void;
-    onClick: (stateId: string, isRightClick: boolean) => void;
+    onClick: (stateId: string, isRightClick: boolean, isShiftClick?: boolean) => void;
     isSelected: boolean;
     isHovered?: boolean;
     onHover?: (stateId: string | null) => void;
@@ -40,7 +40,9 @@ export const StateNode: React.FC<StateNodeProps> = ({
     const handleClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
         // Only handle left-clicks, ignore right-clicks
         if (e.evt.button === 0 || e.evt.button === undefined) {
-            onClick(state.id, false);
+            // Check if Shift key is pressed for start state toggle
+            const isShiftClick = e.evt.shiftKey;
+            onClick(state.id, false, isShiftClick);
         }
     };
 

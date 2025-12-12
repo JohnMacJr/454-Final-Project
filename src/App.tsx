@@ -8,8 +8,7 @@ import { Grid } from './components/Grid';
 import { StateNode } from './components/StateNode';
 import { TransitionArrow } from './components/TransitionArrow';
 import { GRID_SIZE, INITIAL_AUTOMATON } from './constants';
-// Import your logic functions (assuming you will create/implement these files)
-// import { runDFA, runNFA } from './automataLogic'; 
+import { runDFA, runNFA } from './automataLogic'; 
 
 // =============================================================
 //   MAIN APP COMPONENT
@@ -140,7 +139,36 @@ function App() {
         });
     };
 
-    const handleClickOnState = (stateId: string, isRightClick: boolean = false) => {
+    const handleToggleStart = (stateId: string) => {
+        // Toggle start state: if this state is already start, remove it; otherwise set it as the only start state
+        const currentState = findState(stateId);
+        if (!currentState) return;
+
+        if (currentState.isStartState) {
+            // Remove start state
+            updateAutomaton({
+                states: automaton.states.map(s =>
+                    s.id === stateId ? { ...s, isStartState: false } : s
+                )
+            });
+        } else {
+            // Set this as the only start state (remove start from others)
+            updateAutomaton({
+                states: automaton.states.map(s =>
+                    s.id === stateId ? { ...s, isStartState: true } : 
+                    s.isStartState ? { ...s, isStartState: false } : s
+                )
+            });
+        }
+    };
+
+    const handleClickOnState = (stateId: string, isRightClick: boolean = false, isShiftClick: boolean = false) => {
+        // Shift+click: toggle start state
+        if (isShiftClick) {
+            handleToggleStart(stateId);
+            return;
+        }
+
         // Don't create transitions on right-click
         if (isRightClick) {
             return;
@@ -209,21 +237,53 @@ function App() {
         }
     };
 
+    // --- HELPER: Determine if automaton is NFA or DFA ---
+    const isNFA = (automaton: Automaton): boolean => {
+        // Check for epsilon transitions
+        const hasEpsilon = automaton.transitions.some(t => t.symbol === 'ε');
+        if (hasEpsilon) return true;
+
+        // Check for non-determinism: multiple transitions from same state with same symbol
+        const transitionMap = new Map<string, Set<string>>();
+        for (const t of automaton.transitions) {
+            const key = `${t.from}:${t.symbol}`;
+            if (!transitionMap.has(key)) {
+                transitionMap.set(key, new Set());
+            }
+            transitionMap.get(key)!.add(t.to);
+        }
+
+        // If any state+symbol combination has multiple destinations, it's an NFA
+        for (const destinations of transitionMap.values()) {
+            if (destinations.size > 1) return true;
+        }
+
+        return false;
+    };
+
     // --- MEMBERSHIP TEST HANDLER ---
     const handleTestMembership = () => {
         if (testInput.length === 0) {
             setResult("Please enter an input string.");
             return;
         }
-        
-        // **IMPORTANT:** Placeholder call until runNFA/runDFA is implemented.
-        // You will replace this with: const isAccepted = runNFA(automaton, testInput);
-        const isAccepted = testInput.length % 2 === 0; // Simple dummy logic for testing the UI
+
+        // Check if automaton has a start state
+        const startState = automaton.states.find(s => s.isStartState);
+        if (!startState) {
+            setResult("Error: No start state defined. Please mark a state as the start state.");
+            return;
+        }
+
+        // Determine if it's a DFA or NFA and run the appropriate algorithm
+        const nfa = isNFA(automaton);
+        const isAccepted = nfa ? runNFA(automaton, testInput) : runDFA(automaton, testInput);
+        const automatonType = nfa ? 'NFA' : 'DFA';
 
         if (isAccepted) {
-            setResult(`String "${testInput}" is ACCEPTED.`);
+            setResult(`[${automatonType}] String "${testInput}" is ACCEPTED.`);
         } else {
-            setResult(`String "${testInput}" is REJECTED.`);
+            setResult(`[${automatonType}] String "${testInput}" is REJECTED.`);
         }
     };
 
@@ -348,7 +408,7 @@ function App() {
                     {transitionFrom ? `Creating transition from: ${transitionFrom}` : 'Mode: Click a state to start creating a transition'}
                 </div>
                 <div style={{ marginLeft: 'auto', fontSize: '12px', color: '#666' }}>
-                    <div>💡 Tips: Double-click canvas to add state • Right-click state to toggle final/delete • Delete key to remove selected</div>
+                    <div>💡 Tips: Double-click canvas to add state • Shift+click state to toggle start • Right-click state to toggle final • Delete key to remove selected</div>
                 </div>
             </div>
             
