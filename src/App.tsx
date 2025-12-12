@@ -1,6 +1,6 @@
 // src/App.tsx
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Stage, Layer, Arrow } from 'react-konva'; 
 import Konva from 'konva';
 import type { Automaton, Transition } from './types';
@@ -12,7 +12,14 @@ import { runDFA, runNFA, checkDFAEquivalence, isNFA } from './automataLogic';
 import { findState } from './utils';
 import { saveAutomatonToFile, loadAutomatonFromFile, testMembership } from './helpers/automatonHelpers';
 import { useWindowSize } from './hooks/useWindowSize';
-import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'; 
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { RefreshCw } from 'lucide-react'; 
 
 // =============================================================
 //   MAIN APP COMPONENT
@@ -30,7 +37,7 @@ function App() {
     const stageRef1 = useRef<Konva.Stage>(null);
 
     // Automaton 2 state
-    const [automaton2, setAutomaton2] = useState<Automaton>({ ...INITIAL_AUTOMATON, states: [{ id: 'q0', isStartState: false, isFinalState: false, x: 200, y: 300 }] });
+    const [automaton2, setAutomaton2] = useState<Automaton>({ ...INITIAL_AUTOMATON, states: [{ id: 'q0', isStartState: true, isFinalState: false, x: 200, y: 300 }] });
     const [transitionFrom2, setTransitionFrom2] = useState<string | null>(null);
     const [testInput2, setTestInput2] = useState('');
     const [result2, setResult2] = useState<string | null>(null);
@@ -43,7 +50,35 @@ function App() {
     // Equivalence test state
     const [equivalenceResult, setEquivalenceResult] = useState<string | null>(null);
 
+    // Dialog state
+    const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; message: string; onConfirm: () => void }>({ open: false, message: '', onConfirm: () => {} });
+    const [promptDialog, setPromptDialog] = useState<{ open: boolean; message: string; onConfirm: (value: string | null) => void }>({ open: false, message: '', onConfirm: () => {} });
+    const [alertDialog, setAlertDialog] = useState<{ open: boolean; message: string }>({ open: false, message: '' });
+    const [promptValue, setPromptValue] = useState('');
+    const [showTips, setShowTips] = useState(false);
+
     const windowSize = useWindowSize();
+    const hasInitialized = useRef(false);
+
+    // Initialize states at center of window vertically on mount
+    useEffect(() => {
+        if (!hasInitialized.current) {
+            const centerY = windowSize.height / 2;
+            
+            // Update initial positions to center
+            setAutomaton1(prev => ({
+                ...prev,
+                states: prev.states.map(s => ({ ...s, y: centerY }))
+            }));
+            
+            setAutomaton2(prev => ({
+                ...prev,
+                states: prev.states.map(s => ({ ...s, y: centerY }))
+            }));
+            
+            hasInitialized.current = true;
+        }
+    }, [windowSize.height]);
 
     // --- CREATE HANDLERS FOR SPECIFIC AUTOMATON ---
     const createHandlers = (automatonNum: 1 | 2) => {
@@ -61,15 +96,20 @@ function App() {
         const mousePos = automatonNum === 1 ? mousePos1 : mousePos2;
 
         const handleDeleteState = (stateId: string) => {
-            if (window.confirm(`Delete state "${stateId}" and all its transitions?`)) {
-                setAutomaton(prev => ({
-                    ...prev,
-                    states: prev.states.filter(s => s.id !== stateId),
-                    transitions: prev.transitions.filter(t => t.from !== stateId && t.to !== stateId)
-                }));
-                setSelectedState(null);
-                setTransitionFrom(null);
-            }
+            setConfirmDialog({
+                open: true,
+                message: `Delete state "${stateId}" and all its transitions?`,
+                onConfirm: () => {
+                    setAutomaton(prev => ({
+                        ...prev,
+                        states: prev.states.filter(s => s.id !== stateId),
+                        transitions: prev.transitions.filter(t => t.from !== stateId && t.to !== stateId)
+                    }));
+                    setSelectedState(null);
+                    setTransitionFrom(null);
+                    setConfirmDialog({ open: false, message: '', onConfirm: () => {} });
+                }
+            });
         };
 
         const handleDeleteTransition = (transition: Transition) => {
@@ -171,36 +211,36 @@ function App() {
             const from = transitionFrom;
             const to = stateId;
 
-            const symbol = window.prompt(
-                `Create transition from "${from}" to "${to}"\n\n` +
-                `Enter symbol(s) (comma-separated for multiple):\n` +
-                `Example: 0,1 or a,b or ε\n\n` +
-                `(Click Cancel or press Escape to cancel)`
-            );
+            setPromptValue('');
+            setPromptDialog({
+                open: true,
+                message: `Create transition from "${from}" to "${to}"\n\nEnter symbol(s) (comma-separated for multiple):\nExample: 0,1 or a,b or ε`,
+                onConfirm: (symbol) => {
+                    if (symbol && symbol.trim()) {
+                        const symbols = symbol.split(',').map(s => s.trim()).filter(s => s.length > 0);
+                        const newTransitions = symbols.map(sym => ({
+                            from, to, symbol: sym
+                        }));
 
-            if (symbol && symbol.trim()) {
-                const symbols = symbol.split(',').map(s => s.trim()).filter(s => s.length > 0);
-                const newTransitions = symbols.map(sym => ({
-                    from, to, symbol: sym
-                }));
+                        setAutomaton(prev => ({
+                            ...prev,
+                            transitions: [...prev.transitions, ...newTransitions]
+                        }));
 
-                setAutomaton(prev => ({
-                    ...prev,
-                    transitions: [...prev.transitions, ...newTransitions]
-                }));
-
-                setAutomaton(prev => {
-                    const newAlphabet = new Set(prev.alphabet);
-                    symbols.forEach(s => {
-                        const trimmedSymbol = s;
-                        if (trimmedSymbol !== 'ε' && trimmedSymbol.length > 0) newAlphabet.add(trimmedSymbol);
-                    });
-                    return { ...prev, alphabet: newAlphabet };
-                });
-            }
-
-            setTransitionFrom(null);
-            setSelectedState(null);
+                        setAutomaton(prev => {
+                            const newAlphabet = new Set(prev.alphabet);
+                            symbols.forEach(s => {
+                                const trimmedSymbol = s;
+                                if (trimmedSymbol !== 'ε' && trimmedSymbol.length > 0) newAlphabet.add(trimmedSymbol);
+                            });
+                            return { ...prev, alphabet: newAlphabet };
+                        });
+                    }
+                    setTransitionFrom(null);
+                    setSelectedState(null);
+                    setPromptDialog({ open: false, message: '', onConfirm: () => {} });
+                }
+            });
         };
 
         const handleStageClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -297,7 +337,7 @@ function App() {
                 setSelectedState1(null);
             },
             (error) => {
-                alert('Error loading automaton: Invalid JSON file.');
+                setAlertDialog({ open: true, message: 'Error loading automaton: Invalid JSON file.' });
                 console.error('Load error:', error);
             }
         );
@@ -312,7 +352,7 @@ function App() {
                 setSelectedState2(null);
             },
             (error) => {
-                alert('Error loading automaton: Invalid JSON file.');
+                setAlertDialog({ open: true, message: 'Error loading automaton: Invalid JSON file.' });
                 console.error('Load error:', error);
             }
         );
@@ -472,471 +512,416 @@ function App() {
             </div>
 
             {/* TOOLBAR - OVERLAY */}
-            <div style={{ 
-                position: 'fixed',
-                top: '10px',
-                left: '10px',
-                right: '10px',
-                padding: '10px', 
-                backgroundColor: 'rgba(255, 255, 255, 0.95)', 
-                borderRadius: '8px',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '15px',
-                flexWrap: 'wrap',
-                zIndex: 1000,
-                backdropFilter: 'blur(10px)'
-            }}>
-                <div style={{ fontWeight: 'bold', fontSize: '18px', color: '#333' }}>
-                    Automaton Builder
-                </div>
-                <div style={{ 
-                    padding: '5px 12px', 
-                    backgroundColor: (transitionFrom1 || transitionFrom2) ? '#ffeb3b' : '#e3f2fd', 
-                    borderRadius: '4px',
-                    fontSize: '14px',
-                    color: (transitionFrom1 || transitionFrom2) ? '#f57f17' : '#1976d2'
-                }}>
-                    {(transitionFrom1 || transitionFrom2) ? 
-                        `Creating transition from: ${transitionFrom1 || transitionFrom2}` : 
-                        'Mode: Click a state to start creating a transition'}
-                </div>
-                <div style={{ marginLeft: 'auto', fontSize: '12px', color: '#666' }}>
-                    <div>Tips: Double-click canvas to add state • Shift+click state to toggle start • Right-click state to toggle final • Delete key to remove selected</div>
+            <div className="fixed top-2 left-2 right-2 z-[1000] flex flex-col gap-2">
+                <Card className="backdrop-blur-md bg-white/95 shadow-sm rounded-md py-0 gap-0">
+                    <CardContent className="p-1.5 flex items-center gap-2.5 flex-wrap">
+                        <CardTitle className="text-sm font-semibold text-foreground m-0 tracking-tight">
+                            Automaton Builder
+                        </CardTitle>
+                        <div className="ml-auto flex items-center gap-2">
+                            <Badge 
+                                variant={transitionFrom1 || transitionFrom2 ? "default" : "secondary"}
+                                className={`text-xs px-2 py-0.5 ${transitionFrom1 || transitionFrom2 ? "bg-yellow-400 text-yellow-900 hover:bg-yellow-500" : ""}`}
+                            >
+                                {(transitionFrom1 || transitionFrom2) ? 
+                                    `Creating transition from: ${transitionFrom1 || transitionFrom2}` : 
+                                    'Mode: Click a state to start creating a transition'}
+                            </Badge>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => window.location.reload()}
+                                title="Refresh page"
+                            >
+                                <RefreshCw className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* TIPS & CONTROLS BUTTON AND PANEL */}
+                <div className="flex flex-col items-center gap-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs px-2"
+                        onClick={() => setShowTips(!showTips)}
+                    >
+                        {showTips ? 'Hide' : 'Show'} Tips & Controls
+                    </Button>
+
+                    {/* TIPS & CONTROLS PANEL */}
+                    {showTips && (
+                        <Card className="backdrop-blur-md bg-white/95 shadow-sm rounded-md py-0 gap-0 max-w-md w-full">
+                        <CardContent className="p-3">
+                            <CardTitle className="text-xs font-semibold mb-2">Tips & Controls</CardTitle>
+                            <Accordion type="single" collapsible className="w-full">
+                                <AccordionItem value="creating" className="border-0">
+                                    <AccordionTrigger className="text-xs font-semibold py-1.5 px-0">
+                                        Creating States & Transitions
+                                    </AccordionTrigger>
+                                    <AccordionContent className="px-0 pb-2 text-xs space-y-1">
+                                        <div><strong>Add State:</strong> Double-click anywhere on the canvas</div>
+                                        <div><strong>Create Transition:</strong> Click a state, then click another state (or the same state for a self-loop)</div>
+                                        <div><strong>Multiple Symbols:</strong> When creating a transition, enter comma-separated symbols (e.g., "0,1" or "a,b")</div>
+                                        <div><strong>Epsilon (ε):</strong> Use "ε" as a symbol for epsilon transitions</div>
+                                    </AccordionContent>
+                                </AccordionItem>
+
+                                <AccordionItem value="modifying" className="border-0">
+                                    <AccordionTrigger className="text-xs font-semibold py-1.5 px-0">
+                                        Modifying States
+                                    </AccordionTrigger>
+                                    <AccordionContent className="px-0 pb-2 text-xs space-y-1">
+                                        <div><strong>Toggle Start State:</strong> Shift + Click on a state</div>
+                                        <div><strong>Toggle Final State:</strong> Right-click on a state</div>
+                                        <div><strong>Move State:</strong> Click and drag a state to reposition it</div>
+                                        <div><strong>Delete State:</strong> Select a state and press Delete or Backspace</div>
+                                    </AccordionContent>
+                                </AccordionItem>
+
+                                <AccordionItem value="transitions" className="border-0">
+                                    <AccordionTrigger className="text-xs font-semibold py-1.5 px-0">
+                                        Managing Transitions
+                                    </AccordionTrigger>
+                                    <AccordionContent className="px-0 pb-2 text-xs space-y-1">
+                                        <div><strong>Delete Transition:</strong> Hover over a transition and press Delete or Backspace, or right-click and confirm</div>
+                                        <div><strong>Cancel Transition Creation:</strong> Press Escape or click on empty canvas</div>
+                                        <div><strong>Multiple Transitions:</strong> Multiple transitions between the same states are automatically offset</div>
+                                    </AccordionContent>
+                                </AccordionItem>
+
+                                <AccordionItem value="testing" className="border-0">
+                                    <AccordionTrigger className="text-xs font-semibold py-1.5 px-0">
+                                        Testing & Saving
+                                    </AccordionTrigger>
+                                    <AccordionContent className="px-0 pb-2 text-xs space-y-1">
+                                        <div><strong>Membership Test:</strong> Enter a string in the membership test box and click "Test"</div>
+                                        <div><strong>Equivalence Test:</strong> Use the equivalence test to compare two DFAs</div>
+                                        <div><strong>Save Automaton:</strong> Click "Save" in the stats panel to download as JSON</div>
+                                        <div><strong>Load Automaton:</strong> Click "Load" in the stats panel to upload a saved automaton</div>
+                                    </AccordionContent>
+                                </AccordionItem>
+
+                                <AccordionItem value="shortcuts" className="border-0">
+                                    <AccordionTrigger className="text-xs font-semibold py-1.5 px-0">
+                                        Keyboard Shortcuts
+                                    </AccordionTrigger>
+                                    <AccordionContent className="px-0 pb-2 text-xs space-y-1">
+                                        <div><strong>Delete / Backspace:</strong> Delete selected state or hovered transition</div>
+                                        <div><strong>Escape:</strong> Cancel transition creation or clear selection</div>
+                                        <div><strong>Shift + Click:</strong> Toggle start state</div>
+                                        <div><strong>Enter:</strong> Submit input in membership test field</div>
+                                    </AccordionContent>
+                                </AccordionItem>
+                            </Accordion>
+                        </CardContent>
+                    </Card>
+                    )}
                 </div>
             </div>
 
-            {/* EQUIVALENCE TEST - CENTER OVERLAY */}
-            <div style={{ 
-                position: 'fixed',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                padding: '20px', 
-                backgroundColor: 'rgba(255, 255, 255, 0.98)',
-                borderRadius: '8px',
-                boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
-                zIndex: 1001,
-                backdropFilter: 'blur(10px)',
-                minWidth: '350px',
-                border: '2px solid #1976d2'
-            }}>
-                <h3 style={{ marginTop: '0', color: '#333', marginBottom: '15px' }}>Equivalence Test</h3>
-                <button 
-                    onClick={handleTestEquivalence} 
-                    style={{ 
-                        padding: '10px 20px',
-                        borderRadius: '4px',
-                        border: '1px solid #1976d2',
-                        backgroundColor: '#1976d2',
-                        color: 'white',
-                        cursor: 'pointer',
-                        fontSize: '14px',
-                        fontWeight: '500',
-                        width: '100%',
-                        marginBottom: '10px'
-                    }}
-                    onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#1565c0';
-                    }}
-                    onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = '#1976d2';
-                    }}
-                >
-                    Test Equivalence
-                </button>
-                
-                {equivalenceResult && (
-                    <div style={{ 
-                        padding: '10px',
-                        borderRadius: '4px',
-                        backgroundColor: equivalenceResult.includes('EQUIVALENT') ? '#e8f5e9' : '#ffebee',
-                        color: equivalenceResult.includes('EQUIVALENT') ? '#2e7d32' : '#c62828',
-                        fontWeight: 'bold',
-                        fontSize: '14px',
-                        marginTop: '10px'
-                    }}>
-                        {equivalenceResult}
-                    </div>
-                )}
-            </div>
+            {/* EQUIVALENCE TEST - BOTTOM CENTER */}
+            <Card className="fixed bottom-2 left-1/2 -translate-x-1/2 z-[1001] backdrop-blur-md bg-white/98 shadow-lg min-w-[320px] border border-primary rounded-md py-0 gap-0">
+                <CardHeader className="pb-1.5 px-3 pt-2">
+                    <CardTitle className="m-0 text-xs font-semibold">Equivalence Test</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-1.5 px-3 pb-2">
+                    <Button 
+                        onClick={handleTestEquivalence} 
+                        size="sm"
+                        className="w-full h-7 text-xs"
+                    >
+                        Test Equivalence
+                    </Button>
+                    
+                    {equivalenceResult && (
+                        <Badge 
+                            variant={equivalenceResult.includes('EQUIVALENT') ? "default" : "destructive"}
+                            className={`w-full justify-start p-1 text-xs font-medium rounded ${
+                                equivalenceResult.includes('EQUIVALENT') 
+                                    ? 'bg-green-100 text-green-800 hover:bg-green-100' 
+                                    : 'bg-red-100 text-red-800 hover:bg-red-100'
+                            }`}
+                        >
+                            {equivalenceResult}
+                        </Badge>
+                    )}
+                </CardContent>
+            </Card>
             
             {/* AUTOMATON 1 - MEMBERSHIP TEST - LEFT */}
-            <div style={{ 
-                position: 'fixed',
-                bottom: '10px',
-                left: '10px',
-                padding: '15px', 
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                borderRadius: '8px',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                zIndex: 1000,
-                backdropFilter: 'blur(10px)',
-                minWidth: '280px',
-                maxWidth: '400px'
-            }}>
-                <h3 style={{ marginTop: '0', color: '#333', fontSize: '16px' }}>Automaton 1 - Membership Test</h3>
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <input
-                        type="text"
-                        placeholder="Enter string to test"
-                        value={testInput1}
-                        onChange={(e) => setTestInput1(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                handleTestMembership1();
-                            }
-                        }}
-                        style={{ 
-                            padding: '8px 12px', 
-                            borderRadius: '4px',
-                            border: '1px solid #ddd',
-                            fontSize: '14px',
-                            flex: 1,
-                            minWidth: '150px'
-                        }}
-                    />
-                    <button 
-                        onClick={handleTestMembership1} 
-                        style={{ 
-                            padding: '8px 16px',
-                            borderRadius: '4px',
-                            border: '1px solid #1976d2',
-                            backgroundColor: '#1976d2',
-                            color: 'white',
-                            cursor: 'pointer',
-                            fontSize: '14px',
-                            fontWeight: '500'
-                        }}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = '#1565c0';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = '#1976d2';
-                        }}
-                    >
-                        Test
-                    </button>
-                </div>
-                {result1 && (
-                    <div style={{ 
-                        marginTop: '10px',
-                        padding: '8px 12px',
-                        borderRadius: '4px',
-                        backgroundColor: result1.includes('ACCEPTED') ? '#e8f5e9' : '#ffebee',
-                        color: result1.includes('ACCEPTED') ? '#2e7d32' : '#c62828',
-                        fontWeight: 'bold',
-                        fontSize: '13px'
-                    }}>
-                        {result1}
+            <Card className="fixed bottom-2 left-2 z-[1000] backdrop-blur-md bg-white/95 shadow-sm min-w-[260px] max-w-[380px] rounded-md py-0 gap-0">
+                <CardHeader className="pb-1 px-3 pt-2">
+                    <CardTitle className="text-xs font-semibold m-0">Automaton 1 - Membership Test</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-1.5 px-3 pb-2">
+                    <div className="flex gap-2 items-center flex-wrap">
+                        <Input
+                            type="text"
+                            placeholder="Enter string to test"
+                            value={testInput1}
+                            onChange={(e) => setTestInput1(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    handleTestMembership1();
+                                }
+                            }}
+                            className="flex-1 min-w-[140px] h-7 text-xs"
+                        />
+                        <Button 
+                            onClick={handleTestMembership1}
+                            size="sm"
+                            className="h-7 text-xs px-3"
+                        >
+                            Test
+                        </Button>
                     </div>
-                )}
-            </div>
+                    {result1 && (
+                        <Badge 
+                            variant={result1.includes('ACCEPTED') ? "default" : "destructive"}
+                            className={`w-full justify-start p-1 text-xs font-medium rounded ${
+                                result1.includes('ACCEPTED') 
+                                    ? 'bg-green-100 text-green-800 hover:bg-green-100' 
+                                    : 'bg-red-100 text-red-800 hover:bg-red-100'
+                            }`}
+                        >
+                            {result1}
+                        </Badge>
+                    )}
+                </CardContent>
+            </Card>
 
             {/* AUTOMATON 1 - STATISTICS - LEFT */}
-            <div style={{ 
-                position: 'fixed',
-                top: '70px',
-                left: '10px',
-                padding: '15px', 
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                borderRadius: '8px',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px',
-                zIndex: 1000,
-                backdropFilter: 'blur(10px)',
-                minWidth: '180px'
-            }}>
-                <div style={{ fontSize: '13px', color: '#333', fontWeight: 'bold', marginBottom: '5px' }}>
-                    Automaton 1 Stats
-                </div>
-                <div style={{ fontSize: '13px', color: '#333' }}>
-                    <strong>States:</strong> {automaton1.states.length}
-                </div>
-                <div style={{ fontSize: '13px', color: '#333' }}>
-                    <strong>Transitions:</strong> {automaton1.transitions.length}
-                </div>
-                <div style={{ fontSize: '13px', color: '#333' }}>
-                    <strong>Alphabet:</strong> {Array.from(automaton1.alphabet).sort().join(', ') || 'None'}
-                </div>
-                <div style={{ fontSize: '13px', color: '#333' }}>
-                    <strong>Start:</strong> {automaton1.states.find(s => s.isStartState)?.id || 'None'}
-                </div>
-                <div style={{ fontSize: '13px', color: '#333' }}>
-                    <strong>Final:</strong> {automaton1.states.filter(s => s.isFinalState).map(s => s.id).join(', ') || 'None'}
-                </div>
-                <div style={{ marginTop: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <button 
-                        onClick={handleSaveAutomaton1}
-                        style={{ 
-                            padding: '6px 12px',
-                            borderRadius: '4px',
-                            border: '1px solid #4caf50',
-                            backgroundColor: '#4caf50',
-                            color: 'white',
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                            fontWeight: '500',
-                            flex: 1,
-                            minWidth: '70px'
-                        }}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = '#45a049';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = '#4caf50';
-                        }}
-                    >
-                        Save
-                    </button>
-                    <button 
-                        onClick={handleLoadAutomaton1}
-                        style={{ 
-                            padding: '6px 12px',
-                            borderRadius: '4px',
-                            border: '1px solid #2196f3',
-                            backgroundColor: '#2196f3',
-                            color: 'white',
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                            fontWeight: '500',
-                            flex: 1,
-                            minWidth: '70px'
-                        }}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = '#1976d2';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = '#2196f3';
-                        }}
-                    >
-                        Load
-                    </button>
-                </div>
-            </div>
+            <Card className="fixed top-[60px] left-2 z-[1000] backdrop-blur-md bg-white/95 shadow-sm min-w-[160px] rounded-md py-0 gap-0">
+                <CardHeader className="pb-1 px-3 pt-2">
+                    <CardTitle className="text-xs font-semibold m-0">Automaton 1 Stats</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-0.5 text-xs px-3 pb-2">
+                    <div className="leading-tight py-0.5">
+                        <strong className="font-medium">States:</strong> {automaton1.states.length}
+                    </div>
+                    <div className="leading-tight py-0.5">
+                        <strong className="font-medium">Transitions:</strong> {automaton1.transitions.length}
+                    </div>
+                    <div className="leading-tight py-0.5">
+                        <strong className="font-medium">Alphabet:</strong> {Array.from(automaton1.alphabet).sort().join(', ') || 'None'}
+                    </div>
+                    <div className="leading-tight py-0.5">
+                        <strong className="font-medium">Start:</strong> {automaton1.states.find(s => s.isStartState)?.id || 'None'}
+                    </div>
+                    <div className="leading-tight py-0.5">
+                        <strong className="font-medium">Final:</strong> {automaton1.states.filter(s => s.isFinalState).map(s => s.id).join(', ') || 'None'}
+                    </div>
+                    <div className="flex gap-1.5 flex-wrap mt-1.5">
+                        <Button 
+                            onClick={handleSaveAutomaton1}
+                            variant="default"
+                            size="sm"
+                            className="flex-1 min-w-[60px] h-7 text-xs bg-green-600 hover:bg-green-700 px-2"
+                        >
+                            Save
+                        </Button>
+                        <Button 
+                            onClick={handleLoadAutomaton1}
+                            variant="default"
+                            size="sm"
+                            className="flex-1 min-w-[60px] h-7 text-xs px-2"
+                        >
+                            Load
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
 
             {/* AUTOMATON 1 - DEBUG - LEFT */}
-            <details style={{ 
-                position: 'fixed',
-                bottom: '10px',
-                left: '310px',
-                padding: '15px', 
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                borderRadius: '8px',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                zIndex: 1000,
-                backdropFilter: 'blur(10px)',
-                maxWidth: '300px',
-                maxHeight: '250px'
-            }}>
-                <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#666', fontSize: '13px' }}>
-                    Automaton 1 Debug
-                </summary>
-                <pre style={{ 
-                    fontSize: '10px', 
-                    textAlign: 'left', 
-                    maxHeight: '150px', 
-                    overflowY: 'scroll',
-                    marginTop: '10px',
-                    padding: '10px',
-                    backgroundColor: '#f5f5f5',
-                    borderRadius: '4px',
-                    color: '#333'
-                }}>
-                    {JSON.stringify(automaton1.transitions, null, 2)}
-                </pre>
-            </details>
+            <Card className="fixed bottom-2 left-[280px] z-[1000] backdrop-blur-md bg-white/95 shadow-sm max-w-[280px] max-h-[220px] rounded-md py-0 gap-0">
+                <Accordion type="single" collapsible className="w-full">
+                    <AccordionItem value="debug1" className="border-0">
+                        <AccordionTrigger className="text-xs font-semibold text-muted-foreground py-1 px-3">
+                            Automaton 1 Debug
+                        </AccordionTrigger>
+                        <AccordionContent className="px-3 pb-2">
+                            <pre className="text-[10px] text-left max-h-[140px] overflow-y-scroll mt-1 p-1.5 bg-muted rounded text-foreground leading-tight">
+                                {JSON.stringify(automaton1.transitions, null, 2)}
+                            </pre>
+                        </AccordionContent>
+                    </AccordionItem>
+                </Accordion>
+            </Card>
 
             {/* AUTOMATON 2 - MEMBERSHIP TEST - RIGHT */}
-            <div style={{ 
-                position: 'fixed',
-                bottom: '10px',
-                right: '10px',
-                padding: '15px', 
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                borderRadius: '8px',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                zIndex: 1000,
-                backdropFilter: 'blur(10px)',
-                minWidth: '280px',
-                maxWidth: '400px'
-            }}>
-                <h3 style={{ marginTop: '0', color: '#333', fontSize: '16px' }}>Automaton 2 - Membership Test</h3>
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <input
-                        type="text"
-                        placeholder="Enter string to test"
-                        value={testInput2}
-                        onChange={(e) => setTestInput2(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                handleTestMembership2();
-                            }
-                        }}
-                        style={{ 
-                            padding: '8px 12px', 
-                            borderRadius: '4px',
-                            border: '1px solid #ddd',
-                            fontSize: '14px',
-                            flex: 1,
-                            minWidth: '150px'
-                        }}
-                    />
-                    <button 
-                        onClick={handleTestMembership2} 
-                        style={{ 
-                            padding: '8px 16px',
-                            borderRadius: '4px',
-                            border: '1px solid #1976d2',
-                            backgroundColor: '#1976d2',
-                            color: 'white',
-                            cursor: 'pointer',
-                            fontSize: '14px',
-                            fontWeight: '500'
-                        }}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = '#1565c0';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = '#1976d2';
-                        }}
-                    >
-                        Test
-                    </button>
-                </div>
-                {result2 && (
-                    <div style={{ 
-                        marginTop: '10px',
-                        padding: '8px 12px',
-                        borderRadius: '4px',
-                        backgroundColor: result2.includes('ACCEPTED') ? '#e8f5e9' : '#ffebee',
-                        color: result2.includes('ACCEPTED') ? '#2e7d32' : '#c62828',
-                        fontWeight: 'bold',
-                        fontSize: '13px'
-                    }}>
-                        {result2}
+            <Card className="fixed bottom-2 right-2 z-[1000] backdrop-blur-md bg-white/95 shadow-sm min-w-[260px] max-w-[380px] rounded-md py-0 gap-0">
+                <CardHeader className="pb-1 px-3 pt-2">
+                    <CardTitle className="text-xs font-semibold m-0">Automaton 2 - Membership Test</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-1.5 px-3 pb-2">
+                    <div className="flex gap-2 items-center flex-wrap">
+                        <Input
+                            type="text"
+                            placeholder="Enter string to test"
+                            value={testInput2}
+                            onChange={(e) => setTestInput2(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    handleTestMembership2();
+                                }
+                            }}
+                            className="flex-1 min-w-[140px] h-7 text-xs"
+                        />
+                        <Button 
+                            onClick={handleTestMembership2}
+                            size="sm"
+                            className="h-7 text-xs px-3"
+                        >
+                            Test
+                        </Button>
                     </div>
-                )}
-            </div>
+                    {result2 && (
+                        <Badge 
+                            variant={result2.includes('ACCEPTED') ? "default" : "destructive"}
+                            className={`w-full justify-start p-1 text-xs font-medium rounded ${
+                                result2.includes('ACCEPTED') 
+                                    ? 'bg-green-100 text-green-800 hover:bg-green-100' 
+                                    : 'bg-red-100 text-red-800 hover:bg-red-100'
+                            }`}
+                        >
+                            {result2}
+                        </Badge>
+                    )}
+                </CardContent>
+            </Card>
 
             {/* AUTOMATON 2 - STATISTICS - RIGHT */}
-            <div style={{ 
-                position: 'fixed',
-                top: '70px',
-                right: '10px',
-                padding: '15px', 
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                borderRadius: '8px',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px',
-                zIndex: 1000,
-                backdropFilter: 'blur(10px)',
-                minWidth: '180px'
-            }}>
-                <div style={{ fontSize: '13px', color: '#333', fontWeight: 'bold', marginBottom: '5px' }}>
-                    Automaton 2 Stats
-                </div>
-                <div style={{ fontSize: '13px', color: '#333' }}>
-                    <strong>States:</strong> {automaton2.states.length}
-                </div>
-                <div style={{ fontSize: '13px', color: '#333' }}>
-                    <strong>Transitions:</strong> {automaton2.transitions.length}
-                </div>
-                <div style={{ fontSize: '13px', color: '#333' }}>
-                    <strong>Alphabet:</strong> {Array.from(automaton2.alphabet).sort().join(', ') || 'None'}
-                </div>
-                <div style={{ fontSize: '13px', color: '#333' }}>
-                    <strong>Start:</strong> {automaton2.states.find(s => s.isStartState)?.id || 'None'}
-                </div>
-                <div style={{ fontSize: '13px', color: '#333' }}>
-                    <strong>Final:</strong> {automaton2.states.filter(s => s.isFinalState).map(s => s.id).join(', ') || 'None'}
-                </div>
-                <div style={{ marginTop: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <button 
-                        onClick={handleSaveAutomaton2}
-                        style={{ 
-                            padding: '6px 12px',
-                            borderRadius: '4px',
-                            border: '1px solid #4caf50',
-                            backgroundColor: '#4caf50',
-                            color: 'white',
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                            fontWeight: '500',
-                            flex: 1,
-                            minWidth: '70px'
-                        }}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = '#45a049';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = '#4caf50';
-                        }}
-                    >
-                        Save
-                    </button>
-                    <button 
-                        onClick={handleLoadAutomaton2}
-                        style={{ 
-                            padding: '6px 12px',
-                            borderRadius: '4px',
-                            border: '1px solid #2196f3',
-                            backgroundColor: '#2196f3',
-                            color: 'white',
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                            fontWeight: '500',
-                            flex: 1,
-                            minWidth: '70px'
-                        }}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = '#1976d2';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = '#2196f3';
-                        }}
-                    >
-                        Load
-                    </button>
-                </div>
-            </div>
+            <Card className="fixed top-[60px] right-2 z-[1000] backdrop-blur-md bg-white/95 shadow-sm min-w-[160px] rounded-md py-0 gap-0">
+                <CardHeader className="pb-1 px-3 pt-2">
+                    <CardTitle className="text-xs font-semibold m-0">Automaton 2 Stats</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-0.5 text-xs px-3 pb-2">
+                    <div className="leading-tight py-0.5">
+                        <strong className="font-medium">States:</strong> {automaton2.states.length}
+                    </div>
+                    <div className="leading-tight py-0.5">
+                        <strong className="font-medium">Transitions:</strong> {automaton2.transitions.length}
+                    </div>
+                    <div className="leading-tight py-0.5">
+                        <strong className="font-medium">Alphabet:</strong> {Array.from(automaton2.alphabet).sort().join(', ') || 'None'}
+                    </div>
+                    <div className="leading-tight py-0.5">
+                        <strong className="font-medium">Start:</strong> {automaton2.states.find(s => s.isStartState)?.id || 'None'}
+                    </div>
+                    <div className="leading-tight py-0.5">
+                        <strong className="font-medium">Final:</strong> {automaton2.states.filter(s => s.isFinalState).map(s => s.id).join(', ') || 'None'}
+                    </div>
+                    <div className="flex gap-1.5 flex-wrap mt-1.5">
+                        <Button 
+                            onClick={handleSaveAutomaton2}
+                            variant="default"
+                            size="sm"
+                            className="flex-1 min-w-[60px] h-7 text-xs bg-green-600 hover:bg-green-700 px-2"
+                        >
+                            Save
+                        </Button>
+                        <Button 
+                            onClick={handleLoadAutomaton2}
+                            variant="default"
+                            size="sm"
+                            className="flex-1 min-w-[60px] h-7 text-xs px-2"
+                        >
+                            Load
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
 
             {/* AUTOMATON 2 - DEBUG - RIGHT */}
-            <details style={{ 
-                position: 'fixed',
-                bottom: '10px',
-                right: '310px',
-                padding: '15px', 
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                borderRadius: '8px',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                zIndex: 1000,
-                backdropFilter: 'blur(10px)',
-                maxWidth: '300px',
-                maxHeight: '250px'
+            <Card className="fixed bottom-2 right-[280px] z-[1000] backdrop-blur-md bg-white/95 shadow-sm max-w-[280px] max-h-[220px] rounded-md py-0 gap-0">
+                <Accordion type="single" collapsible className="w-full">
+                    <AccordionItem value="debug2" className="border-0">
+                        <AccordionTrigger className="text-xs font-semibold text-muted-foreground py-1 px-3">
+                            Automaton 2 Debug
+                        </AccordionTrigger>
+                        <AccordionContent className="px-3 pb-2">
+                            <pre className="text-[10px] text-left max-h-[140px] overflow-y-scroll mt-1 p-1.5 bg-muted rounded text-foreground leading-tight">
+                                {JSON.stringify(automaton2.transitions, null, 2)}
+                            </pre>
+                        </AccordionContent>
+                    </AccordionItem>
+                </Accordion>
+            </Card>
+
+            {/* CONFIRM DIALOG */}
+            <Dialog open={confirmDialog.open} onOpenChange={(open) => !open && setConfirmDialog({ open: false, message: '', onConfirm: () => {} })}>
+                <DialogContent className="rounded-md">
+                    <DialogHeader className="pb-2">
+                        <DialogTitle className="text-sm font-semibold">Confirm</DialogTitle>
+                        <DialogDescription className="text-xs">{confirmDialog.message}</DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="gap-2">
+                        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setConfirmDialog({ open: false, message: '', onConfirm: () => {} })}>
+                            Cancel
+                        </Button>
+                        <Button size="sm" className="h-8 text-xs" onClick={confirmDialog.onConfirm}>
+                            Confirm
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* PROMPT DIALOG */}
+            <Dialog open={promptDialog.open} onOpenChange={(open) => {
+                if (!open) {
+                    setPromptDialog({ open: false, message: '', onConfirm: () => {} });
+                    setPromptValue('');
+                }
             }}>
-                <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#666', fontSize: '13px' }}>
-                    Automaton 2 Debug
-                </summary>
-                <pre style={{ 
-                    fontSize: '10px', 
-                    textAlign: 'left', 
-                    maxHeight: '150px', 
-                    overflowY: 'scroll',
-                    marginTop: '10px',
-                    padding: '10px',
-                    backgroundColor: '#f5f5f5',
-                    borderRadius: '4px',
-                    color: '#333'
-                }}>
-                    {JSON.stringify(automaton2.transitions, null, 2)}
-                </pre>
-            </details>
+                <DialogContent className="rounded-md">
+                    <DialogHeader className="pb-2">
+                        <DialogTitle className="text-sm font-semibold">Enter Symbol</DialogTitle>
+                        <DialogDescription className="text-xs whitespace-pre-line">{promptDialog.message}</DialogDescription>
+                    </DialogHeader>
+                    <div className="py-2">
+                        <Input
+                            value={promptValue}
+                            onChange={(e) => setPromptValue(e.target.value)}
+                            placeholder="e.g., 0,1 or a,b or ε"
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    promptDialog.onConfirm(promptValue);
+                                } else if (e.key === 'Escape') {
+                                    promptDialog.onConfirm(null);
+                                }
+                            }}
+                            className="h-8 text-xs"
+                            autoFocus
+                        />
+                    </div>
+                    <DialogFooter className="gap-2">
+                        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => promptDialog.onConfirm(null)}>
+                            Cancel
+                        </Button>
+                        <Button size="sm" className="h-8 text-xs" onClick={() => promptDialog.onConfirm(promptValue)}>
+                            Confirm
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ALERT DIALOG */}
+            <Dialog open={alertDialog.open} onOpenChange={(open) => !open && setAlertDialog({ open: false, message: '' })}>
+                <DialogContent className="rounded-md">
+                    <DialogHeader className="pb-2">
+                        <DialogTitle className="text-sm font-semibold">Alert</DialogTitle>
+                        <DialogDescription className="text-xs">{alertDialog.message}</DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button size="sm" className="h-8 text-xs" onClick={() => setAlertDialog({ open: false, message: '' })}>
+                            OK
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

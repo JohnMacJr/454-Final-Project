@@ -55,11 +55,11 @@ export const TransitionArrow: React.FC<TransitionArrowProps> = ({
                         centerX + loopRadius * Math.cos(-Math.PI * 0.6), centerY + loopRadius * Math.sin(-Math.PI * 0.6),
                         fromState.x + STATE_RADIUS * Math.cos(endAngle), fromState.y + STATE_RADIUS * Math.sin(endAngle),
                     ]}
-                    stroke={isHovered ? '#ff4444' : 'black'}
-                    fill={isHovered ? '#ff4444' : 'black'}
-                    strokeWidth={isHovered ? 3 : 2}
-                    pointerLength={10}
-                    pointerWidth={10}
+                    stroke={isHovered ? '#ef4444' : '#1f2937'}
+                    fill={isHovered ? '#ef4444' : '#1f2937'}
+                    strokeWidth={isHovered ? 2 : 1.5}
+                    pointerLength={8}
+                    pointerWidth={8}
                     tension={0.5}
                     onMouseEnter={() => onHover?.(transition)}
                     onMouseLeave={() => onHover?.(null)}
@@ -74,9 +74,12 @@ export const TransitionArrow: React.FC<TransitionArrowProps> = ({
                     x={centerX}
                     y={centerY - loopRadius - 5}
                     text={transition.symbol}
-                    fontSize={14}
-                    fill={isHovered ? '#ff4444' : 'black'}
-                    offsetX={transition.symbol.length * 4}
+                    fontSize={12}
+                    fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif"
+                    fontStyle="normal"
+                    fontWeight={500}
+                    fill={isHovered ? '#ef4444' : '#0f172a'}
+                    offsetX={transition.symbol.length * 3.5}
                     listening={false}
                 />
             </React.Fragment>
@@ -116,11 +119,11 @@ export const TransitionArrow: React.FC<TransitionArrowProps> = ({
         <React.Fragment key={key + index}>
             <Arrow
                 points={[startX, startY, midX, midY, endX, endY]}
-                stroke={isHovered ? '#ff4444' : 'black'}
-                fill={isHovered ? '#ff4444' : 'black'}
-                strokeWidth={isHovered ? 3 : 2}
-                pointerLength={10}
-                pointerWidth={10}
+                stroke={isHovered ? '#ef4444' : '#1f2937'}
+                fill={isHovered ? '#ef4444' : '#1f2937'}
+                strokeWidth={isHovered ? 2 : 1.5}
+                pointerLength={8}
+                pointerWidth={8}
                 tension={0.5} // Makes the line a curve through the midpoint
                 onMouseEnter={() => onHover?.(transition)}
                 onMouseLeave={() => onHover?.(null)}
@@ -137,10 +140,13 @@ export const TransitionArrow: React.FC<TransitionArrowProps> = ({
                 x={midX}
                 y={midY}
                 text={transition.symbol}
-                fontSize={16}
-                fill={isHovered ? '#ff4444' : 'black'}
+                fontSize={12}
+                fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif"
+                fontStyle="normal"
+                fontWeight={500}
+                fill={isHovered ? '#ef4444' : '#0f172a'}
                 // Offset slightly based on the angle so the text is not directly under the line
-                offsetX={transition.symbol.length * 4}
+                offsetX={transition.symbol.length * 3.5}
                 offsetY={angle > -Math.PI/2 && angle < Math.PI/2 ? 15 : -25}
                 listening={false}
             />

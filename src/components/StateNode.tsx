@@ -27,9 +27,9 @@ export const StateNode: React.FC<StateNodeProps> = ({
     onHover,
     onDelete
 }) => {
-    const strokeColor = isSelected ? '#ff0000' : (isHovered ? '#ff8800' : (state.isFinalState ? '#0066cc' : '#333333'));
-    const strokeWidth = isSelected ? 4 : (isHovered ? 3 : 2);
-    const fillColor = isHovered ? '#ffffcc' : STATE_FILL_COLOR;
+    const strokeColor = isSelected ? '#ef4444' : (isHovered ? '#f59e0b' : (state.isFinalState ? '#22c55e' : '#1f2937'));
+    const strokeWidth = isSelected ? 2.5 : (isHovered ? 2 : 1.5);
+    const fillColor = isHovered ? '#fef9c3' : STATE_FILL_COLOR;
 
     const handleContextMenu = (e: Konva.KonvaEventObject<MouseEvent>) => {
         e.evt.preventDefault();
@@ -53,11 +53,11 @@ export const StateNode: React.FC<StateNodeProps> = ({
             {state.isStartState && (
                 <Arrow
                     points={[state.x - 70, state.y, state.x - STATE_RADIUS, state.y]}
-                    stroke="black"
-                    fill="black"
-                    strokeWidth={2}
-                    pointerLength={10}
-                    pointerWidth={10}
+                    stroke="#1f2937"
+                    fill="#1f2937"
+                    strokeWidth={1.5}
+                    pointerLength={8}
+                    pointerWidth={8}
                     listening={false}
                 />
             )}
@@ -69,7 +69,7 @@ export const StateNode: React.FC<StateNodeProps> = ({
                     y={state.y}
                     radius={STATE_RADIUS + 5}
                     stroke={strokeColor}
-                    strokeWidth={2}
+                    strokeWidth={1.5}
                     listening={false}
                 />
             )}
@@ -96,10 +96,13 @@ export const StateNode: React.FC<StateNodeProps> = ({
                 x={state.x}
                 y={state.y}
                 text={state.id}
-                fontSize={16}
-                fill="black"
-                offsetX={state.id.length * 4}
-                offsetY={8}
+                fontSize={14}
+                fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif"
+                fontStyle="normal"
+                fontWeight={500}
+                fill="#0f172a"
+                offsetX={state.id.length * 3.5}
+                offsetY={7}
                 listening={false}
             />
         </React.Fragment>
