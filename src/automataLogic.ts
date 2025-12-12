@@ -36,7 +36,16 @@ export const runDFA = (automaton: Automaton, inputString: string): boolean => {
     }
 
     const next = getNextDFAState(automaton.transitions, current, symbol);
-    if (!next) return false;
+    
+    // If no explicit transition, check for loop on all inputs
+    if (!next) {
+      const currentState = automaton.states.find(s => s.id === current);
+      if (currentState?.hasLoopOnAllInputs) {
+        // Stay in current state (loop on all inputs)
+        continue;
+      }
+      return false;
+    }
 
     current = next;
   }
@@ -88,9 +97,22 @@ export const runNFA = (automaton: Automaton, inputString: string): boolean => {
     const nextStates = new Set<string>();
 
     for (const state of currentStates) {
+      let hasExplicitTransition = false;
+      
+      // Check for explicit transitions
       for (const t of automaton.transitions) {
         if (t.from === state && t.symbol === symbol) {
           nextStates.add(t.to);
+          hasExplicitTransition = true;
+        }
+      }
+      
+      // If no explicit transition, check for loop on all inputs
+      if (!hasExplicitTransition) {
+        const stateObj = automaton.states.find(s => s.id === state);
+        if (stateObj?.hasLoopOnAllInputs) {
+          // Stay in current state (loop on all inputs)
+          nextStates.add(state);
         }
       }
     }

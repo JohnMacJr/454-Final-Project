@@ -9,6 +9,7 @@ export interface StateNodeProps {
     onDragMove: (e: Konva.KonvaEventObject<DragEvent>, stateId: string) => void;
     onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => void;
     onContextMenu: (e: Konva.KonvaEventObject<MouseEvent>, stateId: string) => void;
+    onToggleLoopOnAllInputs?: (e: Konva.KonvaEventObject<MouseEvent>, stateId: string) => void;
     onClick: (stateId: string, isRightClick: boolean, isShiftClick?: boolean) => void;
     isSelected: boolean;
     isHovered?: boolean;
@@ -20,7 +21,8 @@ export const StateNode: React.FC<StateNodeProps> = ({
     state, 
     onDragMove,
     onDragEnd, 
-    onContextMenu, 
+    onContextMenu,
+    onToggleLoopOnAllInputs,
     onClick, 
     isSelected,
     isHovered = false,
@@ -33,8 +35,13 @@ export const StateNode: React.FC<StateNodeProps> = ({
 
     const handleContextMenu = (e: Konva.KonvaEventObject<MouseEvent>) => {
         e.evt.preventDefault();
-        // Right-click toggles final state (don't trigger onClick)
-        onContextMenu(e, state.id);
+        // Ctrl+Right-click toggles loop on all inputs
+        if (e.evt.ctrlKey || e.evt.metaKey) {
+            onToggleLoopOnAllInputs?.(e, state.id);
+        } else {
+            // Right-click toggles final state (don't trigger onClick)
+            onContextMenu(e, state.id);
+        }
     };
 
     const handleClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -105,6 +112,23 @@ export const StateNode: React.FC<StateNodeProps> = ({
                 offsetY={7}
                 listening={false}
             />
+            
+            {/* Asterisk for loop on all inputs */}
+            {state.hasLoopOnAllInputs && (
+                <Text
+                    x={state.x}
+                    y={state.y}
+                    text="*"
+                    fontSize={16}
+                    fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif"
+                    fontStyle="normal"
+                    fontWeight={700}
+                    fill="#dc2626"
+                    offsetX={state.id.length * 3.5 + 8}
+                    offsetY={7}
+                    listening={false}
+                />
+            )}
         </React.Fragment>
     );
 };

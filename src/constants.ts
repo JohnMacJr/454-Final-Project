@@ -14,7 +14,7 @@ export const GRID_SIZE = 20;
 // Initial automaton data
 export const INITIAL_AUTOMATON: Automaton = {
     states: [
-        { id: 'q0', isStartState: true, isFinalState: false, x: 200, y: 300 },
+        { id: 'q0', isStartState: true, isFinalState: false, hasLoopOnAllInputs: false, x: 200, y: 300 },
     ],
     alphabet: new Set(['0', '1']),
     transitions: [],

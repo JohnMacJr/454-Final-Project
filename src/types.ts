@@ -4,6 +4,7 @@ export interface State {
   id: string;
   isStartState: boolean;
   isFinalState: boolean;
+  hasLoopOnAllInputs: boolean; // If true, state loops on all input symbols (marked with asterisk)
   x: number;
   y: number;
 }

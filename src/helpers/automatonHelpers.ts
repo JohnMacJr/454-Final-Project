@@ -40,10 +40,14 @@ export const loadAutomatonFromFile = (
         const json = event.target?.result as string;
         const loaded = JSON.parse(json);
         
-        // Convert alphabet array back to Set
+        // Convert alphabet array back to Set and ensure states have all required fields
         const automaton: Automaton = {
           ...loaded,
-          alphabet: new Set(loaded.alphabet || [])
+          alphabet: new Set(loaded.alphabet || []),
+          states: (loaded.states || []).map((state: any) => ({
+            ...state,
+            hasLoopOnAllInputs: state.hasLoopOnAllInputs ?? false
+          }))
         };
         
         onLoad(automaton);

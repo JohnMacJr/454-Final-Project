@@ -37,7 +37,7 @@ function App() {
     const stageRef1 = useRef<Konva.Stage>(null);
 
     // Automaton 2 state
-    const [automaton2, setAutomaton2] = useState<Automaton>({ ...INITIAL_AUTOMATON, states: [{ id: 'q0', isStartState: true, isFinalState: false, x: 200, y: 300 }] });
+    const [automaton2, setAutomaton2] = useState<Automaton>({ ...INITIAL_AUTOMATON, states: [{ id: 'q0', isStartState: true, isFinalState: false, hasLoopOnAllInputs: false, x: 200, y: 300 }] });
     const [transitionFrom2, setTransitionFrom2] = useState<string | null>(null);
     const [testInput2, setTestInput2] = useState('');
     const [result2, setResult2] = useState<string | null>(null);
@@ -156,7 +156,7 @@ function App() {
                 ...prev,
                 states: [
                     ...prev.states,
-                    { id: newId, isStartState: false, isFinalState: false, x, y }
+                    { id: newId, isStartState: false, isFinalState: false, hasLoopOnAllInputs: false, x, y }
                 ],
             }));
         };
@@ -166,6 +166,15 @@ function App() {
                 ...prev,
                 states: prev.states.map(s =>
                     s.id === id ? { ...s, isFinalState: !s.isFinalState } : s
+                )
+            }));
+        };
+
+        const handleToggleLoopOnAllInputs = (_e: Konva.KonvaEventObject<MouseEvent>, id: string) => {
+            setAutomaton(prev => ({
+                ...prev,
+                states: prev.states.map(s =>
+                    s.id === id ? { ...s, hasLoopOnAllInputs: !s.hasLoopOnAllInputs } : s
                 )
             }));
         };
@@ -271,6 +280,7 @@ function App() {
             handleDragEnd,
             handleStageDblClick,
             handleToggleFinal,
+            handleToggleLoopOnAllInputs,
             handleToggleStart,
             handleClickOnState,
             handleStageClick,
@@ -465,6 +475,7 @@ function App() {
                             onDragMove={(e) => handlers.handleDragMove(e, state.id)}
                             onDragEnd={handlers.handleDragEnd(state.id)}
                             onContextMenu={handlers.handleToggleFinal}
+                            onToggleLoopOnAllInputs={handlers.handleToggleLoopOnAllInputs}
                             onClick={handlers.handleClickOnState}
                             isSelected={state.id === handlers.transitionFrom || state.id === handlers.selectedState}
                             isHovered={handlers.hoveredState === state.id}
@@ -565,7 +576,7 @@ function App() {
                                         <div><strong>Add State:</strong> Double-click anywhere on the canvas</div>
                                         <div><strong>Create Transition:</strong> Click a state, then click another state (or the same state for a self-loop)</div>
                                         <div><strong>Multiple Symbols:</strong> When creating a transition, enter comma-separated symbols (e.g., "0,1" or "a,b")</div>
-                                        <div><strong>Epsilon (ε):</strong> Use "ε" as a symbol for epsilon transitions</div>
+                                        <div><strong>Epsilon (ε):</strong> Use "ε" as a symbol for epsilon transitions. Automata with epsilon transitions are automatically classified as NFAs.</div>
                                     </AccordionContent>
                                 </AccordionItem>
 
@@ -576,6 +587,7 @@ function App() {
                                     <AccordionContent className="px-0 pb-2 text-xs space-y-1">
                                         <div><strong>Toggle Start State:</strong> Shift + Click on a state</div>
                                         <div><strong>Toggle Final State:</strong> Right-click on a state</div>
+                                        <div><strong>Loop on All Inputs (*):</strong> Ctrl+Right-click (Cmd+Right-click on Mac) on a state to toggle. States with this feature (marked with *) will loop on all input symbols that don't have explicit transitions.</div>
                                         <div><strong>Move State:</strong> Click and drag a state to reposition it</div>
                                         <div><strong>Delete State:</strong> Select a state and press Delete or Backspace</div>
                                     </AccordionContent>
@@ -612,6 +624,7 @@ function App() {
                                         <div><strong>Delete / Backspace:</strong> Delete selected state or hovered transition</div>
                                         <div><strong>Escape:</strong> Cancel transition creation or clear selection</div>
                                         <div><strong>Shift + Click:</strong> Toggle start state</div>
+                                        <div><strong>Ctrl+Right-click (Cmd+Right-click):</strong> Toggle loop on all inputs for a state</div>
                                         <div><strong>Enter:</strong> Submit input in membership test field</div>
                                     </AccordionContent>
                                 </AccordionItem>
