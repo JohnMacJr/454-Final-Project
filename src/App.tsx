@@ -390,6 +390,109 @@ function App() {
         }
     };
 
+    // --- SAVE/LOAD HANDLERS ---
+    const handleSaveAutomaton1 = () => {
+        const automatonToSave = {
+            ...automaton1,
+            alphabet: Array.from(automaton1.alphabet)
+        };
+        const json = JSON.stringify(automatonToSave, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'automaton1.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    const handleSaveAutomaton2 = () => {
+        const automatonToSave = {
+            ...automaton2,
+            alphabet: Array.from(automaton2.alphabet)
+        };
+        const json = JSON.stringify(automatonToSave, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'automaton2.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    const handleLoadAutomaton1 = () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.onchange = (e) => {
+            const file = (e.target as HTMLInputElement).files?.[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const json = event.target?.result as string;
+                    const loaded = JSON.parse(json);
+                    
+                    // Convert alphabet array back to Set
+                    const automaton: Automaton = {
+                        ...loaded,
+                        alphabet: new Set(loaded.alphabet || [])
+                    };
+                    
+                    setAutomaton1(automaton);
+                    setResult1(null);
+                    setTransitionFrom1(null);
+                    setSelectedState1(null);
+                } catch (error) {
+                    alert('Error loading automaton: Invalid JSON file.');
+                    console.error('Load error:', error);
+                }
+            };
+            reader.readAsText(file);
+        };
+        input.click();
+    };
+
+    const handleLoadAutomaton2 = () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.onchange = (e) => {
+            const file = (e.target as HTMLInputElement).files?.[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const json = event.target?.result as string;
+                    const loaded = JSON.parse(json);
+                    
+                    // Convert alphabet array back to Set
+                    const automaton: Automaton = {
+                        ...loaded,
+                        alphabet: new Set(loaded.alphabet || [])
+                    };
+                    
+                    setAutomaton2(automaton);
+                    setResult2(null);
+                    setTransitionFrom2(null);
+                    setSelectedState2(null);
+                } catch (error) {
+                    alert('Error loading automaton: Invalid JSON file.');
+                    console.error('Load error:', error);
+                }
+            };
+            reader.readAsText(file);
+        };
+        input.click();
+    };
+
     // --- EQUIVALENCE TEST HANDLER ---
     const handleTestEquivalence = () => {
         const startState1 = automaton1.states.find(s => s.isStartState);
@@ -417,9 +520,9 @@ function App() {
         const isEquivalent = checkDFAEquivalence(automaton1, automaton2);
         
         if (isEquivalent) {
-            setEquivalenceResult("✅ The two DFAs are EQUIVALENT (accept the same language).");
+            setEquivalenceResult("The two DFAs are EQUIVALENT (accept the same language).");
         } else {
-            setEquivalenceResult("❌ The two DFAs are NOT EQUIVALENT (accept different languages).");
+            setEquivalenceResult("The two DFAs are NOT EQUIVALENT (accept different languages).");
         }
     };
 
@@ -575,7 +678,7 @@ function App() {
                         'Mode: Click a state to start creating a transition'}
                 </div>
                 <div style={{ marginLeft: 'auto', fontSize: '12px', color: '#666' }}>
-                    <div>💡 Tips: Double-click canvas to add state • Shift+click state to toggle start • Right-click state to toggle final • Delete key to remove selected</div>
+                    <div>Tips: Double-click canvas to add state • Shift+click state to toggle start • Right-click state to toggle final • Delete key to remove selected</div>
                 </div>
             </div>
 
@@ -740,6 +843,54 @@ function App() {
                 <div style={{ fontSize: '13px', color: '#333' }}>
                     <strong>Final:</strong> {automaton1.states.filter(s => s.isFinalState).map(s => s.id).join(', ') || 'None'}
                 </div>
+                <div style={{ marginTop: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button 
+                        onClick={handleSaveAutomaton1}
+                        style={{ 
+                            padding: '6px 12px',
+                            borderRadius: '4px',
+                            border: '1px solid #4caf50',
+                            backgroundColor: '#4caf50',
+                            color: 'white',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            fontWeight: '500',
+                            flex: 1,
+                            minWidth: '70px'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = '#45a049';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = '#4caf50';
+                        }}
+                    >
+                        Save
+                    </button>
+                    <button 
+                        onClick={handleLoadAutomaton1}
+                        style={{ 
+                            padding: '6px 12px',
+                            borderRadius: '4px',
+                            border: '1px solid #2196f3',
+                            backgroundColor: '#2196f3',
+                            color: 'white',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            fontWeight: '500',
+                            flex: 1,
+                            minWidth: '70px'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = '#1976d2';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = '#2196f3';
+                        }}
+                    >
+                        Load
+                    </button>
+                </div>
             </div>
 
             {/* AUTOMATON 1 - DEBUG - LEFT */}
@@ -879,6 +1030,54 @@ function App() {
                 </div>
                 <div style={{ fontSize: '13px', color: '#333' }}>
                     <strong>Final:</strong> {automaton2.states.filter(s => s.isFinalState).map(s => s.id).join(', ') || 'None'}
+                </div>
+                <div style={{ marginTop: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button 
+                        onClick={handleSaveAutomaton2}
+                        style={{ 
+                            padding: '6px 12px',
+                            borderRadius: '4px',
+                            border: '1px solid #4caf50',
+                            backgroundColor: '#4caf50',
+                            color: 'white',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            fontWeight: '500',
+                            flex: 1,
+                            minWidth: '70px'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = '#45a049';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = '#4caf50';
+                        }}
+                    >
+                        Save
+                    </button>
+                    <button 
+                        onClick={handleLoadAutomaton2}
+                        style={{ 
+                            padding: '6px 12px',
+                            borderRadius: '4px',
+                            border: '1px solid #2196f3',
+                            backgroundColor: '#2196f3',
+                            color: 'white',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            fontWeight: '500',
+                            flex: 1,
+                            minWidth: '70px'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = '#1976d2';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = '#2196f3';
+                        }}
+                    >
+                        Load
+                    </button>
                 </div>
             </div>
 
